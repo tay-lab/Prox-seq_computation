@@ -27,10 +27,11 @@ import datetime
 # =============================================================================
 # # Random point generators
 # # Return an n-by-3 array, where the columns are x, y and z coordinates
+# # Do NOT put seed number into the point generators!!!
 # =============================================================================
 def randomPointGen2D(n):
     '''
-    Generate points on a sphere surface
+    Generate points on a sphere surface with unit radius
 
     Parameters
     ----------
@@ -45,7 +46,6 @@ def randomPointGen2D(n):
     '''
     # Generate n random points on the surface of a unit sphere
     # Ref: http://mathworld.wolfram.com/SpherePointPicking.html
-
     theta = np.random.uniform(0, 2*math.pi, size=(n,))
     z = np.random.uniform(-1,1, size=(n,))
     x = np.sqrt(1-z**2)*np.cos(theta)
@@ -55,7 +55,7 @@ def randomPointGen2D(n):
 
 def randomPointGen3D(n):
     '''
-    Generate points inside a sphere
+    Generate points inside a sphere with unit radius
 
     Parameters
     ----------
@@ -259,7 +259,7 @@ class simulatePLA:
                 temp_scale = np.random.negative_binomial(n=self.n_nbinom, p=1/(1+self.probeA[i]/self.n_nbinom), size=self.n_cells)
                 variance_probeA_ns.append(temp_scale)
                 variance_probeB_ns.append(temp_scale*self.probeB[i]/self.probeA[i])
-                
+
             for i in range(self.num_complex.shape[0]):
                 variance_complex.append([])
                 for j in range(self.num_complex.shape[1]):
@@ -283,7 +283,7 @@ class simulatePLA:
             # Initialize the count dictionary of each single cell
             dge[cell_i] = {f'{i+1}{self.sep}{j+1}':0 for i in range(len(self.probeA)) for j in range(len(self.probeB))}
 
-            # Add protein variance 
+            # Add protein variance
             if self.protein_variance:
                 probeA_i = copy.deepcopy(variance_probeA_ns[:,cell_i]).astype(int)
                 probeB_i = copy.deepcopy(variance_probeB_ns[:,cell_i]).astype(int)
@@ -432,7 +432,7 @@ class plaObject:
     protein_count : pandas data frame
         Calculate protein count from PLA count data. Output is comparable to
         CITE-seq and REAP-seq.
-    
+
     proteins : list
         List of detected proteins.
 
@@ -448,17 +448,17 @@ class plaObject:
     tol_ : numpy array
         Array of tolerance values for each iteration for predictComplex 'old'
         method. This is used as the convergence criterion.
-        
+
     shape : tuple
         Shape of PLA product count matrix.
-    
+
     sep : string
         Delimiter of PLA products. Example: for CD3:CD3, sep is ':'
-        
+
     complex_fisher : pandas data frame
         P-value of protein complex expression, calculated using one-sided
         Fisher's exact test
-        
+
 
     '''
     def __init__(self, data, unligated_marker=None, sep=':'):
@@ -498,7 +498,7 @@ class plaObject:
         # Get the unique antibody targets
         AB_unique = np.unique(np.concatenate((AB1,AB2)))
         AB_unique.sort()
-        
+
         # Save list of proteins
         self.proteins = list(AB_unique)
 
@@ -507,7 +507,7 @@ class plaObject:
 
         for i in self.protein_count.index:
             self.protein_count.loc[i,:] = (self.pla_count.loc[AB1==i,:]).sum(axis=0) + (self.pla_count.loc[AB2==i,:]).sum(axis=0)
-    
+
 
     def calculateExpected(self):
         '''
@@ -670,21 +670,21 @@ class plaObject:
             for i in self.pla_count.index:
                 # Get targets of probe A and B
                 probeA, probeB = i.split(self.sep)
-                
+
                 # Set up variables
-                
+
                 X = (self.unligated_count.loc[f"{probeA}_A",:]*self.unligated_count.loc[f"{probeB}_B",:]/scale).to_numpy() # scale the product by the scale factor
                 # Multiple OLS
                 # X = np.vstack((self.unligated_count.loc[f"{probeA}_A",:],
                 #                self.unligated_count.loc[f"{probeB}_B",:],
                 #                self.unligated_count.loc[f"{probeA}_A",:]*self.unligated_count.loc[f"{probeB}_B",:]/scale)).T
-                
+
                 X = sm.add_constant(X, prepend=True)
                 y = self.pla_count.loc[i,:].to_numpy()
 
                 # Ordinary least squares
                 # results = sm.OLS(y, X).fit()
-                
+
                 # Weighted least squares
                 mask = X[:,1] > 0
                 # Only look at PLA products with random ligation noise in at least 3 cells
@@ -705,7 +705,7 @@ class plaObject:
                                     1 - stats.t.cdf(t_intercept, df=results.df_resid),
                                     results.params[1],
                                     1 - stats.t.cdf(t_slope, df=results.df_resid)]
-                
+
                 # Store the predicted complex count
                 complex_count.loc[i,:] = self.pla_count.loc[i,:] - X[:,1]*results.params[1]
 
@@ -716,20 +716,20 @@ class plaObject:
             OLS_out.loc[:,"fdr_slope"] = np.nan
             mask = ~OLS_out.loc[:,"pval_slope"].isna()
             OLS_out.loc[mask,"fdr_slope"] = multipletests(OLS_out.loc[mask,"pval_slope"], method='fdr_bh')[1]
-            
+
             # Calculate complex count
             for i in complex_count.index:
                 # Get targets of probe A and B
                 probeA, probeB = i.split(self.sep)
-                
+
                 if not (OLS_out.at[i,"fdr_intercept"] <= p_cutoff):
                     complex_count.loc[i,:] = 0
                     # if (OLS_out.at[i,"fdr_slope"] <= p_cutoff):
                     #     complex_count.loc[i,:] = self.pla_count.loc[i,:] - OLS_out.at[i,"slope"]*self.unligated_count.loc[f"{probeA}_A",:]*self.unligated_count.loc[f"{probeB}_B",:]/scale
                     # else: # slope is 0
                     #     complex_count.loc[i,:] = self.pla_count.loc[i,:]
-                    
-            
+
+
             # Set minimum count to 0
             complex_count[complex_count<0] = 0
 
@@ -889,12 +889,12 @@ class plaObject:
 
             setattr(self, f"complex_count{suffix}", pd.DataFrame(data=complex_out, index=self.pla_count.index, columns=self.pla_count.columns))
             setattr(self, f"tol{suffix}_", np.array(tol_))
-            
+
     def predictComplexFisher(self):
         '''
         Predict complex expression in single-cells using one-sided Fisher's
         exact test, and return a BH-corrected P-value
-            
+
         '''
         fisher_p = pd.DataFrame(np.nan, index=self.pla_count.index, columns=self.pla_count.columns)
         probeA = np.array([s.split(':')[0] for s in fisher_p.index])
@@ -911,7 +911,7 @@ class plaObject:
             for j in fisher_p.columns:
                 fisher_p.at[i,j] = stats.fisher_exact([[self.pla_count.loc[x00,j], temp01[j]],
                                                             [temp10[j], temp11[j]]], alternative='greater')[1]
-                
+
         # FDR correction: single cell by single cell
         self.complex_fisher = pd.DataFrame(np.nan, index=self.pla_count.index, columns=self.pla_count.columns)
         for i in self.complex_fisher.columns:
