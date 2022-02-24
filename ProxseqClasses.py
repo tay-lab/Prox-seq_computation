@@ -96,21 +96,6 @@ class simulatePLA:
 
     Parameters
     ----------
-    num_complex : numpy array
-        An NA-by-NB array containing the number of complexes on each cell
-        (NA and NB is the number of targets of probe A and B), and element i,j is
-        the abundance of complex i:j.
-
-    probeA : numpy array
-        An NA-by-1 array containing the number of expressed proteins bound by
-        probe A (entry [i] is the abundance of non-complex forming protein i,
-                 bound by PLA probe A).
-
-    probeB : numpy array
-        An NB-by-1 array containing the number of expressed proteins bound by
-        probe B (entry [j] is the abundance of non-complex forming protein j,
-                 bound by PLA probe B).
-
     cell_d : float
         The cell diameter in nanometer.
         Default is 10,000.
@@ -123,15 +108,17 @@ class simulatePLA:
         The number of cells to simulate.
 
     mode : string
-        '2D' (PLA probes are on cell surface, default) or
-        '3D' (PLA probes are intracellular).
+        '2D' (Prox-seq probes target cell surface proteins) or
+        '3D' (Prox-seq probes target intracellular proteins).
+        Default is '2D'.
 
     ligate_all : boolean, optional
         Whether only 1 PLA pair or all pairs are allowed to be ligated.
         Default is False.
 
     protein_variance : boolean
-        Whether to simulate variance of protein/complex expression (scaled gamma distribution).
+        Whether to simulate variance of protein/complex expression using a
+        negative binomial distribution.
         Default is False.
 
     n_nbinom : float, optional
@@ -182,26 +169,24 @@ class simulatePLA:
 
     def simulate(self, num_complex, probeA, probeB, verbose=True):
         '''
-        Simulate PLA count data
+        Simulate PLA product count data
 
         Parameters
         ----------
         num_complex : list or numpy array
             An NA-by-NB array containing the number of complexes on each cell
-            (NA and NB is the number of targets of probe A and B), and element i,j is
+            (NA and NB is the number of targets of probe A and B). Element [i,j] is
             the abundance of complex i:j.
 
         probeA : list or numpy array
             An NA-by-1 array containing the counts of non-interacting proteins
-            bound by probe A
-            (entry [i] is the abundance of non-complex forming protein i,
-             bound by PLA probe A).
+            bound by probe A. Element [i] is the abundance of non-complex forming
+            protein i, bound by Prox-seq probe A.
 
         probeB : list or numpy array
             An NB-by-1 array containing the counts of non-interacting proteins
-            bound by probe B
-            (entry [j] is the abundance of non-complex forming protein j,
-             bound by PLA probe B).
+            bound by probe B. Element [j] is the abundance of non-complex forming
+            protein j, bound by Prox-seq probe B.
 
         verbose : bool, optional
             Whether to print out the simulation progress.
@@ -407,7 +392,7 @@ class simulatePLA:
 # =============================================================================
 class plaObject:
     '''
-    Import PLA count data (PLA products by single cells).
+    Import PLA product count data. Rows are PLA products, columns are single cells.
     Can be used to calculate protein abundance, expected count, and predict
     protein complex count
 
@@ -452,7 +437,7 @@ class plaObject:
         PLA products.
 
     tol_ : numpy array
-        Array of tolerance values for each iteration for predictComplex 'old'
+        Array of tolerance values for each iteration for predictComplex 'iterative'
         method. This is used as the convergence criterion.
 
     shape : tuple
@@ -523,7 +508,7 @@ class plaObject:
 
     def calculateExpected(self):
         '''
-        Calculate the expected count of a PLA product using marginal probabilities.
+        Calculate the expected random count of all PLA products.
 
         '''
 
@@ -595,7 +580,7 @@ class plaObject:
             Default is None.
 
         scale : float, option
-            A positive scaling factor for linear regression. The product of 
+            A positive scaling factor for linear regression. The product of
             non-proximal probe counts is divided by this factor before fitting,
             in order to make the linear regression more stable.
             Default is 1.
@@ -603,7 +588,7 @@ class plaObject:
         intercept_cutoff : float, optional
             The value for the intercept under the null hypothesis.
             Default is 1.
-        
+
         slope_cutoff : float, optional
             The value for the intercept under the null hypothesis.
             Default is 0.
@@ -611,7 +596,7 @@ class plaObject:
         p_cutoff : boolean, optional
             The P-value to reject the null hypothesis.
             Default is 0.01.
-            
+
 
         ========== 'iterative' method ==========
         non_interacting : list, optional
@@ -737,7 +722,7 @@ class plaObject:
             for i in complex_count.index:
                 # Get targets of probe A and B
                 probeA, probeB = i.split(self.sep)
-                
+
                 # Filter out complexes that fail the intercept test
                 if (LS_out.at[i,"fdr_intercept"] > p_cutoff):
                     complex_count.loc[i,:] = 0
@@ -906,12 +891,12 @@ class plaObject:
 
             setattr(self, f"complex_count{suffix}", pd.DataFrame(data=complex_out, index=self.pla_count.index, columns=self.pla_count.columns))
             setattr(self, f"tol{suffix}_", np.array(tol_))
-        
+
         elif method == "test": # calculate random ligation from PLA products
             # random ligation of PLA product i:j = abundance of probe Ai * abundance of probe Bj
             # abundance of probe Ai = sum of Xi,k over k != j
             # abundance of probe Bj = sum of Xk,j over k != i
-        
+
             # Set up variables
             # Initialize the complex_count data frame
             complex_count = pd.DataFrame(0, index=self.pla_count.index, columns=self.pla_count.columns)
@@ -925,7 +910,7 @@ class plaObject:
             for i in self.pla_count.index:
                 # Get targets of probe A and B
                 probeA, probeB = i.split(self.sep)
-                
+
                 # Set up the variables for regression
                 X = ((self.pla_probe_count.loc[f"{probeA}_A",:]-self.pla_count.loc[i,:])*
                      (self.pla_probe_count.loc[f"{probeB}_B",:]-self.pla_count.loc[i,:])).to_numpy()
@@ -997,7 +982,7 @@ class plaObject:
     def predictComplexFisher(self):
         '''
         Predict complex expression in single-cells using one-sided Fisher's
-        exact test, and return a BH-corrected P-value
+        exact test, and return a BH-corrected P-value.
 
         '''
         fisher_p = pd.DataFrame(np.nan, index=self.pla_count.index, columns=self.pla_count.columns)
