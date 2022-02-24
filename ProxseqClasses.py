@@ -92,7 +92,7 @@ def randomPointGen3D(n):
 # =============================================================================
 class simulatePLA:
     '''
-    A class to simulate PLA counts of a cocktail of N targets.
+    A class to simulate PLA product counts in single cells.
 
     Parameters
     ----------
@@ -430,7 +430,7 @@ class plaObject:
 
     complex_count : pandas data frame
         Predicted protein complex count. May have a suffix depending on the
-        setting of predictComplex().
+        settings of predictComplex().
 
     pla_probe_count : pandas data frame
         The count of each Prox-seq probe A and B, calculted from the detected

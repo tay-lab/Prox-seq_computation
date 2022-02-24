@@ -11,8 +11,8 @@ For a tutorial on how to use the framework, please refer to [Prox-seq_simulation
 
 ### Simulation of Prox-seq data
 **Class name: simulatePLA**
-    '''
-    A class to simulate PLA counts of a cocktail of N targets.
+
+A class to simulate PLA product counts in single cells.
 
     Parameters
     ----------
@@ -28,7 +28,8 @@ For a tutorial on how to use the framework, please refer to [Prox-seq_simulation
         The number of cells to simulate.
 
     mode : string
-        '2D' (Prox-seq probes target cell surface proteins) or '3D' (Prox-seq probes target intracellular proteins).
+        '2D' (Prox-seq probes target cell surface proteins) or
+        '3D' (Prox-seq probes target intracellular proteins).
         Default is '2D'.
 
     ligate_all : boolean, optional
@@ -40,7 +41,8 @@ For a tutorial on how to use the framework, please refer to [Prox-seq_simulation
         Default is False.
 
     n_nbinom : float, optional
-        n is the number of successes for negative binomial distribution for protein variance. p, the probability of success, is set such that the mean of the
+        n is the number of successes for negative binomial distribution for protein
+        variance. p, the probability of success, is set such that the mean of the
         negative binomial distribution is equal to the desired mean.
         Increase this n parameter in order to decrease the protein variance.
         Default is 1.5.
@@ -65,7 +67,8 @@ For a tutorial on how to use the framework, please refer to [Prox-seq_simulation
         The true count of non-interacting probes.
 
     non_proximal_count : pandas data frame
-        The count of  probes. In a Prox-seq experiments, these probes are not measured, because they are not ligated with any other probes.
+        The count of  probes. In a Prox-seq experiments, these probes
+        are not measured, because they are not ligated with any other probes.
 
 #### Attributes of class simulatePLA
 **simulate(self, num_complex, probeA, probeB, verbose=True)**
@@ -74,14 +77,19 @@ For a tutorial on how to use the framework, please refer to [Prox-seq_simulation
     Parameters
     ----------
     num_complex : list or numpy array
-        An NA-by-NB array containing the number of complexes on each cell (NA and NB is the number of targets of probe A and B). Element [i,j] is the abundance of complex i:j.
+        An NA-by-NB array containing the number of complexes on each cell
+        (NA and NB is the number of targets of probe A and B). Element [i,j] is
+        the abundance of complex i:j.
 
     probeA : list or numpy array
-        An NA-by-1 array containing the counts of non-interacting proteins bound by probe A. Element [i] is the abundance of non-complex forming protein i, bound by Prox-seq probe A.
+        An NA-by-1 array containing the counts of non-interacting proteins
+        bound by probe A. Element [i] is the abundance of non-complex forming
+        protein i, bound by Prox-seq probe A.
 
     probeB : list or numpy array
         An NB-by-1 array containing the counts of non-interacting proteins
-        bound by probe B. Entry [j] is the abundance of non-complex forming protein j, bound by Prox-seq probe B.
+        bound by probe B. Element [j] is the abundance of non-complex forming
+        protein j, bound by Prox-seq probe B.
 
     verbose : bool, optional
         Whether to print out the simulation progress.
@@ -89,6 +97,7 @@ For a tutorial on how to use the framework, please refer to [Prox-seq_simulation
 
 ### Analysis of PLA product count data
 **Class name: plaObject**
+
 Import PLA product count data. Rows are PLA products, columns are single cells.
 Can be used to calculate protein abundance, expected count, and predict
 protein complex count
@@ -99,7 +108,10 @@ protein complex count
       Data frame of PLA count. Columns are cell barcodes, rows are PLA products.
 
   non_proximal_marker : string, option
-      The name for marker of probeB_non_proximal PLA products. If a string, the marker will be used to extract probeB_non_proximal count of each probe. For example, if non_proximal_marker="oligo", then PLA product "CD3:oligo" is understood as probeB_non_proximal count of CD3 probe A, ie "CD3_A".
+    The name for marker of probeB_non_proximal PLA products. If a string, the marker
+      will be used to extract probeB_non_proximal count of each probe. For example, if
+      non_proximal_marker="oligo", then PLA product "CD3:oligo" is understood as
+      probeB_non_proximal count of CD3 probe A, ie "CD3_A".
       If None, then non-proximal count is not extracted.
       Default is None.
 
@@ -113,7 +125,8 @@ protein complex count
       Imported PLA product count data.
 
   protein_count : pandas data frame
-      Calculate protein count from PLA count data. Output is comparable to CITE-seq and REAP-seq.
+      Calculate protein count from PLA count data. Output is comparable to
+      CITE-seq and REAP-seq.
 
   proteins : list
       List of detected proteins.
@@ -122,13 +135,16 @@ protein complex count
       Expected PLA count if no protein complexes exist.
 
   complex_count : pandas data frame
-      Predicted protein complex count. May have a suffix depending on the setting of predictComplex().
+      Predicted protein complex count. May have a suffix depending on the
+      settings of predictComplex().
 
   pla_probe_count : pandas data frame
-      The count of each Prox-seq probe A and B, calculted from the detected PLA products.
+      The count of each Prox-seq probe A and B, calculted from the detected
+      PLA products.
 
   tol_ : numpy array
-      Array of tolerance values for each iteration for predictComplex 'iterative' method. This is used as the convergence criterion.
+      Array of tolerance values for each iteration for predictComplex 'iterative'
+      method. This is used as the convergence criterion.
 
   shape : tuple
       Shape of PLA product count matrix.
@@ -146,15 +162,19 @@ protein complex count
 
 #### Attributes
 **calculateProteinCount()**
+
 Calculate protein count
 
 **calculateExpected()**
+
 Calculate the expected random count of all PLA products.
 
 **calculateProbeCount()**
+
 Calculate the counts of probes A and B of each target from the counts of PLA products.
 
 **predictComplex(self, method='iterative', non_proximal_count=None, scale=1, intercept_cutoff=1, slope_cutoff=0, mean_cutoff=1, p_cutoff=0.05, non_interacting=None, p_adjust=True, sym_weight=0.25, df_guess=None, nIter=200, tol=1, suffix='')**
+
 Predict complex count with two methods, 'iterative' or 'lr'.
 
     Parameters
@@ -239,10 +259,12 @@ Predict complex count with two methods, 'iterative' or 'lr'.
         Default is ''.
 
 **predictComplexFisher()**
+
 Predict complex expression in single-cells using one-sided Fisher's exact test, and return a BH-corrected P-value.
 
 ### General functions
 **randomPointGen2D(n)**
+
 For generating random points on a sphere surface with unit radius (i.e., extracellular protein targets)
 
     Parameters
@@ -255,7 +277,8 @@ For generating random points on a sphere surface with unit radius (i.e., extrace
     numpy array
         Return an n-by-3 array, where the columns are x, y and z coordinates
 
-**def randomPointGen3D(n)**
+**randomPointGen3D(n)**
+
 For generating random points on a sphere surface with unit radius (i.e., intracellular protein targets)
 
     Parameters
