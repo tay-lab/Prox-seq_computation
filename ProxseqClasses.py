@@ -5,7 +5,8 @@ Address: Pritzker School of Molecular Engineering
          The University of Chicago
          Chicago, IL 60637, USA
 
-This file contains the functions used to analyze PLA data obtained from Prox-seq
+This file contains the functions used to simulate Prox-seq data, and the predictive
+and linear regression methods for prediction of protein complex from Prox-seq
 """
 
 # Import packages
@@ -157,10 +158,11 @@ class simulatePLA:
         The true complex abundance.
 
     probe_count : pandas data frame
-        The true abundance of non-interacting probes.
+        The true count of non-interacting probes.
 
-    unligated_count : pandas data frame
-        The count of unligated probes.
+    non_proximal_count : pandas data frame
+        The count of  probes. In a Prox-seq experiments, these probes
+        are not measured, because they are not ligated with any other probes.
 
     '''
 
@@ -190,14 +192,16 @@ class simulatePLA:
             the abundance of complex i:j.
 
         probeA : list or numpy array
-            An NA-by-1 array containing the number of expressed proteins bound by
-            probe A (entry [i] is the abundance of non-complex forming protein i,
-                     bound by PLA probe A).
+            An NA-by-1 array containing the counts of non-interacting proteins
+            bound by probe A
+            (entry [i] is the abundance of non-complex forming protein i,
+             bound by PLA probe A).
 
         probeB : list or numpy array
-            An NB-by-1 array containing the number of expressed proteins bound by
-            probe B (entry [j] is the abundance of non-complex forming protein j,
-                     bound by PLA probe B).
+            An NB-by-1 array containing the counts of non-interacting proteins
+            bound by probe B
+            (entry [j] is the abundance of non-complex forming protein j,
+             bound by PLA probe B).
 
         verbose : bool, optional
             Whether to print out the simulation progress.
@@ -242,8 +246,8 @@ class simulatePLA:
         # Dictionary to store actual non-complexing forming probe abundance of each single cell
         dge_probe_true = {}
 
-        # Dictionary to store unligated probes of each single cell
-        dge_unligated = {}
+        # Dictionary to store  probes of each single cell
+        dge_non_proximal = {}
 
 
         # Protein variance: negative binomial distribution
@@ -342,7 +346,7 @@ class simulatePLA:
             # Ligation =========
             # Go through each probe A, then see if it can ligate with any probe B
             probeB_blacklist = set([]) # index of blacklisted probes B, which are excluded from future ligation in ligate_all=False
-            probeA_blacklist = set([]) # index of ligated probes A, used for unligated_count
+            probeA_blacklist = set([]) # index of ligated probes A, used for non_proximal_count
 
             # Find pairs within ligation distance
             valid_pairs = np.argwhere(pairwise_dist <= self.PLA_dist)
@@ -363,18 +367,18 @@ class simulatePLA:
                 probeA_blacklist.add(i[0])
                 probeB_blacklist.add(i[1])
 
-            # Tally the unligated probe count
-            dge_unligated[cell_i] = {}
-            probeA_unligated = np.ones(probeA_targets.shape, dtype=bool)
-            probeA_unligated[list(probeA_blacklist)] = False
-            probeA_unligated = np.unique(probeA_targets[probeA_unligated], return_counts=True)
-            for i, j in zip(*probeA_unligated):
-                dge_unligated[cell_i][f"{i}_A"] = j
-            probeB_unligated = np.ones(probeB_targets.shape, dtype=bool)
-            probeB_unligated[list(probeB_blacklist)] = False
-            probeB_unligated = np.unique(probeB_targets[probeB_unligated], return_counts=True)
-            for i, j in zip(*probeB_unligated):
-                dge_unligated[cell_i][f"{i}_B"] = j
+            # Tally the  probe count
+            dge_non_proximal[cell_i] = {}
+            probeA_non_proximal = np.ones(probeA_targets.shape, dtype=bool)
+            probeA_non_proximal[list(probeA_blacklist)] = False
+            probeA_non_proximal = np.unique(probeA_targets[probeA_non_proximal], return_counts=True)
+            for i, j in zip(*probeA_non_proximal):
+                dge_non_proximal[cell_i][f"{i}_A"] = j
+            probeB_non_proximal = np.ones(probeB_targets.shape, dtype=bool)
+            probeB_non_proximal[list(probeB_blacklist)] = False
+            probeB_non_proximal = np.unique(probeB_targets[probeB_non_proximal], return_counts=True)
+            for i, j in zip(*probeB_non_proximal):
+                dge_non_proximal[cell_i][f"{i}_B"] = j
 
             # Keep track of time
             if verbose:
@@ -391,8 +395,8 @@ class simulatePLA:
         self.probe_count = pd.DataFrame(dge_probe_true, index=[f"{i+1}_A"for i in range(num_complex.shape[0])] +
                                         [f"{i+1}_B" for i in range(num_complex.shape[1])])
 
-        self.unligated_count = pd.DataFrame(dge_unligated)
-        self.unligated_count.fillna(value=0, inplace=True) # replace nan with 0
+        self.non_proximal_count = pd.DataFrame(dge_non_proximal)
+        self.non_proximal_count.fillna(value=0, inplace=True) # replace nan with 0
 
 
 
@@ -412,12 +416,12 @@ class plaObject:
     data : pandas data frame
         Data frame of PLA count. Columns are cell barcodes, rows are PLA products.
 
-    unligated_marker : string, option
-        The name for marker of unligated PLA products. If a string, the marker
-        will be used to extract unligated count of each probe. For example, if
-        unligated_marker="oligo", then PLA product "CD3:oligo" is understood as
-        unligated count of CD3 probe A, ie "CD3_A".
-        If None, then unligated count is not extracted.
+    non_proximal_marker : string, option
+        The name for marker of probeB_non_proximal PLA products. If a string, the marker
+        will be used to extract probeB_non_proximal count of each probe. For example, if
+        non_proximal_marker="oligo", then PLA product "CD3:oligo" is understood as
+        probeB_non_proximal count of CD3 probe A, ie "CD3_A".
+        If None, then non-proximal count is not extracted.
         Default is None.
 
     sep : string, optional
@@ -439,11 +443,13 @@ class plaObject:
     pla_expected : pandas data frame
         Expected PLA count if no protein complexes exist.
 
-    predicted_complex_count : pandas data frame
-        Predicted protein complex count.
+    complex_count : pandas data frame
+        Predicted protein complex count. May have a suffix depending on the
+        setting of predictComplex().
 
-    probe_count : pandas data frame
-        Calculate the abundance of each Prox-seq probe A and B.
+    pla_probe_count : pandas data frame
+        The count of each Prox-seq probe A and B, calculted from the detected
+        PLA products.
 
     tol_ : numpy array
         Array of tolerance values for each iteration for predictComplex 'old'
@@ -455,33 +461,39 @@ class plaObject:
     sep : string
         Delimiter of PLA products. Example: for CD3:CD3, sep is ':'
 
+    lr_params : pandas data frame
+        Contains the parameters of the weighted least squares models, obtained
+        from the linear regression (LR) method
+        Columns: intercept , slope , SE_intercept , SE_slope ,
+        intercept P value , slope P value , df
+
     complex_fisher : pandas data frame
         P-value of protein complex expression, calculated using one-sided
         Fisher's exact test
 
 
     '''
-    def __init__(self, data, unligated_marker=None, sep=':'):
+    def __init__(self, data, non_proximal_marker=None, sep=':'):
 
-        if unligated_marker is None:
+        if non_proximal_marker is None:
             self.pla_count = data.copy()
-            self.unligated_count = None
+            self.non_proximal_count = None
 
         else:
             probeA = np.array([s.split(sep)[0] for s in data.index])
             probeB = np.array([s.split(sep)[1] for s in data.index])
-            self.pla_count = data.loc[(probeA!=unligated_marker) & (probeB!=unligated_marker),:].copy()
+            self.pla_count = data.loc[(probeA!=non_proximal_marker) & (probeB!=non_proximal_marker),:].copy()
 
-            # Extract unligated_count data
-            self.unligated_count = data.loc[(probeA!=unligated_marker) ^ (probeB!=unligated_marker),:].copy()
+            # Extract non_proximal_count data
+            self.non_proximal_count = data.loc[(probeA!=non_proximal_marker) ^ (probeB!=non_proximal_marker),:].copy()
             new_index = []
-            for i in self.unligated_count.index:
+            for i in self.non_proximal_count.index:
                 k,j = i.split(sep)
-                if k == unligated_marker:
+                if k == non_proximal_marker:
                     new_index.append(f"{j}_B")
-                elif j == unligated_marker:
+                elif j == non_proximal_marker:
                     new_index.append(f"{k}_A")
-            self.unligated_count.index = new_index
+            self.non_proximal_count.index = new_index
 
         self.sep = sep
         self.shape = data.shape
@@ -529,7 +541,8 @@ class plaObject:
 
     def calculateProbeCount(self):
         '''
-        Calculate the counts of probes A and B of each target.
+        Calculate the counts of probes A and B of each target from the counts
+        of PLA products.
 
         '''
 
@@ -554,9 +567,10 @@ class plaObject:
         output1.index = [f"{i}_A" for i in output1.index]
         output2.index = [f"{i}_B" for i in output2.index]
 
-        self.probe_count = pd.concat([output1,output2])
+        self.pla_probe_count = pd.concat([output1,output2])
 
-    def predictComplex(self, method='iterative', unligated_count=None, scale=1,
+    def predictComplex(self, method='iterative', non_proximal_count=None, scale=1,
+                       intercept_cutoff=1, slope_cutoff=0,
                        mean_cutoff=1, p_cutoff=0.05,
                        non_interacting=None,
                        p_adjust=True, sym_weight=0.25, df_guess=None,
@@ -568,36 +582,38 @@ class plaObject:
         ----------
         method : string, optional
             Whether to use the 'iterative' or 'lr' method for predicting complex count.
-            lr method: use unligated count and weighted least squares regression.
+            lr method: use  count and weighted least squares regression.
             iterative method: iteratively solve a system of quadratic equations.
             Default is 'iterative'.
 
-        ========== 'new' method ==========
-        unligated_count : pandas data frame
-            Count of unligated probes. The row names of the data frame have the
+        ========== 'lr' method ==========
+        non_proximal_count : pandas data frame
+            Count of  probes. The row names of the data frame have the
             label of A and B to indicate probe A and B. For example: CD3_A and
             CD3_B.
-            If None, use the unligated_count currently stored.
+            If None, use the non_proximal_count currently stored.
             Default is None.
 
         scale : float, option
-            A positive scaling factor for linear regression. The product of unligated
-            counts is divided by this factor before fitting, in order to make the
-            linear regression more stable.
+            A positive scaling factor for linear regression. The product of 
+            non-proximal probe counts is divided by this factor before fitting,
+            in order to make the linear regression more stable.
             Default is 1.
 
-        mean_cutoff : float, optional
+        intercept_cutoff : float, optional
             The value for the intercept under the null hypothesis.
             Default is 1.
+        
+        slope_cutoff : float, optional
+            The value for the intercept under the null hypothesis.
+            Default is 0.
 
         p_cutoff : boolean, optional
             The P-value to reject the null hypothesis.
             Default is 0.01.
+            
 
-        Returns the information about OLS parameters for each PLA product.
-        Columns: intercept , slope , SE_intercept , SE_slope , intercept P value , slope P value , df
-
-        ========== 'old' method ==========
+        ========== 'iterative' method ==========
         non_interacting : list, optional
             List of PLA products or proteins that do no form protein complexes.
             Example: [X:Y] means X:Y does not form a complex, while [X] means X does
@@ -647,12 +663,12 @@ class plaObject:
 
 
         if method == 'lr':
-            # Check if unligated_count data is available
-            if unligated_count is None:
-                if self.unligated_count is None:
-                    raise TypeError("Missing unligated_count data for \'new\' method.")
+            # Check if non_proximal_count data is available
+            if non_proximal_count is None:
+                if self.non_proximal_count is None:
+                    raise TypeError("Missing non_proximal_count data for LR method.")
             else:
-                self.unligated_count = unligated_count.copy()
+                self.non_proximal_count = non_proximal_count.copy()
 
             # Check if the scaling factor is positive
             if scale <= 0:
@@ -662,8 +678,8 @@ class plaObject:
             complex_count = pd.DataFrame(0, index=self.pla_count.index, columns=self.pla_count.columns)
 
 
-            # Store OLS parameters
-            OLS_out = pd.DataFrame(np.nan, index=self.pla_count.index,
+            # Store WLS parameters
+            LS_out = pd.DataFrame(np.nan, index=self.pla_count.index,
                                    columns=["intercept","pval_intercept","slope","pval_slope"])
 
             # Iterate through each PLA product and perform linear regression
@@ -673,11 +689,11 @@ class plaObject:
 
                 # Set up variables
 
-                X = (self.unligated_count.loc[f"{probeA}_A",:]*self.unligated_count.loc[f"{probeB}_B",:]/scale).to_numpy() # scale the product by the scale factor
+                X = (self.non_proximal_count.loc[f"{probeA}_A",:]*self.non_proximal_count.loc[f"{probeB}_B",:]/scale).to_numpy() # scale the product by the scale factor
                 # Multiple OLS
-                # X = np.vstack((self.unligated_count.loc[f"{probeA}_A",:],
-                #                self.unligated_count.loc[f"{probeB}_B",:],
-                #                self.unligated_count.loc[f"{probeA}_A",:]*self.unligated_count.loc[f"{probeB}_B",:]/scale)).T
+                # X = np.vstack((self.non_proximal_count.loc[f"{probeA}_A",:],
+                #                self.non_proximal_count.loc[f"{probeB}_B",:],
+                #                self.non_proximal_count.loc[f"{probeA}_A",:]*self.non_proximal_count.loc[f"{probeB}_B",:]/scale)).T
 
                 X = sm.add_constant(X, prepend=True)
                 y = self.pla_count.loc[i,:].to_numpy()
@@ -694,14 +710,14 @@ class plaObject:
 
                 # One-sided t-test on both intercepts and slope
                 # Intercept: one-sided t-test (mean above mean_cutoff)
-                t_intercept = (results.params[0]-mean_cutoff)/results.bse[0]
+                t_intercept = (results.params[0] - intercept_cutoff)/results.bse[0]
                 # Slope: one-sided t-test (mean above 0)
-                t_slope = (results.params[1]-0)/results.bse[1]
+                t_slope = (results.params[1] - slope_cutoff)/results.bse[1]
                 # t_slopeB = (results.params[2]-0)/results.bse[2]
                 # t_slopeAB = (results.params[3]-0)/results.bse[3]
 
-                # Store the OLS parameters
-                OLS_out.loc[i,:] = [results.params[0],
+                # Store the LS parameters
+                LS_out.loc[i,:] = [results.params[0],
                                     1 - stats.t.cdf(t_intercept, df=results.df_resid),
                                     results.params[1],
                                     1 - stats.t.cdf(t_slope, df=results.df_resid)]
@@ -710,22 +726,23 @@ class plaObject:
                 complex_count.loc[i,:] = self.pla_count.loc[i,:] - X[:,1]*results.params[1]
 
             # FDR correction
-            OLS_out.loc[:,"fdr_intercept"] = np.nan
-            mask = ~OLS_out.loc[:,"pval_intercept"].isna()
-            OLS_out.loc[mask,"fdr_intercept"] = multipletests(OLS_out.loc[mask,"pval_intercept"], method='fdr_bh')[1]
-            OLS_out.loc[:,"fdr_slope"] = np.nan
-            mask = ~OLS_out.loc[:,"pval_slope"].isna()
-            OLS_out.loc[mask,"fdr_slope"] = multipletests(OLS_out.loc[mask,"pval_slope"], method='fdr_bh')[1]
+            LS_out.loc[:,"fdr_intercept"] = np.nan
+            mask = ~LS_out.loc[:,"pval_intercept"].isna()
+            LS_out.loc[mask,"fdr_intercept"] = multipletests(LS_out.loc[mask,"pval_intercept"], method='fdr_bh')[1]
+            LS_out.loc[:,"fdr_slope"] = np.nan
+            mask = ~LS_out.loc[:,"pval_slope"].isna()
+            LS_out.loc[mask,"fdr_slope"] = multipletests(LS_out.loc[mask,"pval_slope"], method='fdr_bh')[1]
 
             # Calculate complex count
             for i in complex_count.index:
                 # Get targets of probe A and B
                 probeA, probeB = i.split(self.sep)
-
-                if not (OLS_out.at[i,"fdr_intercept"] <= p_cutoff):
+                
+                # Filter out complexes that fail the intercept test
+                if (LS_out.at[i,"fdr_intercept"] > p_cutoff):
                     complex_count.loc[i,:] = 0
-                    # if (OLS_out.at[i,"fdr_slope"] <= p_cutoff):
-                    #     complex_count.loc[i,:] = self.pla_count.loc[i,:] - OLS_out.at[i,"slope"]*self.unligated_count.loc[f"{probeA}_A",:]*self.unligated_count.loc[f"{probeB}_B",:]/scale
+                    # if (LS_out.at[i,"fdr_slope"] <= p_cutoff):
+                    #     complex_count.loc[i,:] = self.pla_count.loc[i,:] - LS_out.at[i,"slope"]*self.non_proximal_count.loc[f"{probeA}_A",:]*self.non_proximal_count.loc[f"{probeB}_B",:]/scale
                     # else: # slope is 0
                     #     complex_count.loc[i,:] = self.pla_count.loc[i,:]
 
@@ -736,8 +753,8 @@ class plaObject:
             setattr(self, f"complex_count{suffix}",
                     pd.DataFrame(data=complex_count.round().astype(np.int64), index=self.pla_count.index, columns=self.pla_count.columns))
 
-            return OLS_out
-
+            # return LS_out
+            setattr(self, f"lr_params{suffix}", LS_out)
 
         elif method == 'iterative':
 
@@ -889,6 +906,93 @@ class plaObject:
 
             setattr(self, f"complex_count{suffix}", pd.DataFrame(data=complex_out, index=self.pla_count.index, columns=self.pla_count.columns))
             setattr(self, f"tol{suffix}_", np.array(tol_))
+        
+        elif method == "test": # calculate random ligation from PLA products
+            # random ligation of PLA product i:j = abundance of probe Ai * abundance of probe Bj
+            # abundance of probe Ai = sum of Xi,k over k != j
+            # abundance of probe Bj = sum of Xk,j over k != i
+        
+            # Set up variables
+            # Initialize the complex_count data frame
+            complex_count = pd.DataFrame(0, index=self.pla_count.index, columns=self.pla_count.columns)
+
+
+            # Store WLS parameters
+            LS_out = pd.DataFrame(np.nan, index=self.pla_count.index,
+                                   columns=["intercept","pval_intercept","slope","pval_slope"])
+
+            # Iterate through each PLA product and perform linear regression
+            for i in self.pla_count.index:
+                # Get targets of probe A and B
+                probeA, probeB = i.split(self.sep)
+                
+                # Set up the variables for regression
+                X = ((self.pla_probe_count.loc[f"{probeA}_A",:]-self.pla_count.loc[i,:])*
+                     (self.pla_probe_count.loc[f"{probeB}_B",:]-self.pla_count.loc[i,:])).to_numpy()
+                # Multiple OLS
+                # X = np.vstack((self.non_proximal_count.loc[f"{probeA}_A",:],
+                #                self.non_proximal_count.loc[f"{probeB}_B",:],
+                #                self.non_proximal_count.loc[f"{probeA}_A",:]*self.non_proximal_count.loc[f"{probeB}_B",:]/scale)).T
+
+                X = sm.add_constant(X, prepend=True)
+                y = self.pla_count.loc[i,:].to_numpy()
+
+                # Ordinary least squares
+                results = sm.OLS(y, X).fit()
+
+                # # Weighted least squares
+                # mask = X[:,1] > 0
+                # # Only look at PLA products with random ligation noise in at least 3 cells
+                # if sum(mask) < 3:
+                #     continue
+                # results = sm.WLS(y[mask], X[mask,:], weights=1/X[mask,1]).fit()
+
+                # One-sided t-test on both intercepts and slope
+                # Intercept: one-sided t-test (mean above mean_cutoff)
+                t_intercept = (results.params[0]-mean_cutoff)/results.bse[0]
+                # Slope: one-sided t-test (mean above 0)
+                t_slope = (results.params[1]-0)/results.bse[1]
+                # t_slopeB = (results.params[2]-0)/results.bse[2]
+                # t_slopeAB = (results.params[3]-0)/results.bse[3]
+
+                # Store the LS parameters
+                LS_out.loc[i,:] = [results.params[0],
+                                    1 - stats.t.cdf(t_intercept, df=results.df_resid),
+                                    results.params[1],
+                                    1 - stats.t.cdf(t_slope, df=results.df_resid)]
+
+                # Store the predicted complex count
+                complex_count.loc[i,:] = self.pla_count.loc[i,:] - X[:,1]*results.params[1]
+
+            # FDR correction
+            LS_out.loc[:,"fdr_intercept"] = np.nan
+            mask = ~LS_out.loc[:,"pval_intercept"].isna()
+            LS_out.loc[mask,"fdr_intercept"] = multipletests(LS_out.loc[mask,"pval_intercept"], method='fdr_bh')[1]
+            LS_out.loc[:,"fdr_slope"] = np.nan
+            mask = ~LS_out.loc[:,"pval_slope"].isna()
+            LS_out.loc[mask,"fdr_slope"] = multipletests(LS_out.loc[mask,"pval_slope"], method='fdr_bh')[1]
+
+            # Calculate complex count
+            for i in complex_count.index:
+                # Get targets of probe A and B
+                probeA, probeB = i.split(self.sep)
+
+                if not (LS_out.at[i,"fdr_intercept"] <= p_cutoff):
+                    complex_count.loc[i,:] = 0
+                    # if (LS_out.at[i,"fdr_slope"] <= p_cutoff):
+                    #     complex_count.loc[i,:] = self.pla_count.loc[i,:] - LS_out.at[i,"slope"]*self.non_proximal_count.loc[f"{probeA}_A",:]*self.non_proximal_count.loc[f"{probeB}_B",:]/scale
+                    # else: # slope is 0
+                    #     complex_count.loc[i,:] = self.pla_count.loc[i,:]
+
+
+            # Set minimum count to 0
+            complex_count[complex_count<0] = 0
+
+            setattr(self, f"complex_count{suffix}",
+                    pd.DataFrame(data=complex_count.round().astype(np.int64), index=self.pla_count.index, columns=self.pla_count.columns))
+
+            # return LS_out
+            setattr(self, f"lr_params{suffix}", LS_out)
 
     def predictComplexFisher(self):
         '''
