@@ -557,8 +557,8 @@ class plaObject:
     def predictComplex(self, method='iterative', non_proximal_count=None, scale=1,
                        intercept_cutoff=1, slope_cutoff=0,
                        mean_cutoff=1, p_cutoff=0.05,
-                       non_interacting=None,
-                       p_adjust=True, sym_weight=0.25, df_guess=None,
+                       non_interacting=None, test='T-test',
+                       p_adjust=True, sym_weight=1, df_guess=None,
                        nIter=200, tol=1, suffix=''):
         '''
         Predict complex count with two methods, 'iterative' and 'lr'.
@@ -605,6 +605,8 @@ class plaObject:
             not form complexes with any other proteins.
             If None, use an empty list.
             Default is None.
+        test : statistical test used to calulcate p-value.
+            Default is 'T-test'.
 
         mean_cutoff : float, optional
             PLA products whose estimated complex abundance at each iteration
@@ -623,6 +625,7 @@ class plaObject:
 
         sym_weight : float (0 <= sym_weight <= 1), optional
             The weight factor used to enforce symmetry condition.
+            Default is 1.
 
         df_guess : pandas data frame, optional
             First guesses of true complex abundance (must be the same shape as data).
@@ -813,11 +816,13 @@ class plaObject:
 
                     # Check to see if the estimated abundance passes the mean_cutoff (old stats version doesn't have 'alternative' option)
                     # Ha: sample mean > mean_cutoff
-                    tval, tp = stats.ttest_1samp(temp_diff, mean_cutoff)
-                    if (tval > 0):
-                        tp_all[self.pla_count.index[i]] = tp/2
+                    if test == 'wilcoxon':
+                        tval, tp = stats.wilcoxon(temp_diff,alternative='greater',zero_method = 'wilcox')
+                        tp_all[self.pla_count.index[i]] = tp
+        
                     else:
-                        tp_all[self.pla_count.index[i]] = 1-tp/2
+                        tval, tp = stats.ttest_1samp(temp_diff, mean_cutoff, alternative='greater')
+                        tp_all[self.pla_count.index[i]] = tp
 
                 # Convert p-values dictionary to series
                 tp_all = pd.Series(tp_all)
